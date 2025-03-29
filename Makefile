@@ -6,40 +6,28 @@
 help:
 	@echo "MasterTime.ua Commands:"
 	@echo "-------------------"
-	@echo "make install        # Initial project setup"
 	@echo "make up             # Start all containers"
 	@echo "make down           # Stop all containers"
 	@echo "make restart        # Restart all containers"
 	@echo ""
-	@echo "make frontend       # Access frontend shell"
-	@echo "make frontend-build # Build frontend for production"
-	@echo "make frontend-lint  # Run linting on frontend code"
-	@echo ""
 	@echo "make backend        # Access backend shell"
+	@echo "make backend-composer-install # Install backend dependencies"
 	@echo "make backend-migrate # Run database migrations"
 	@echo "make backend-seed   # Run database seeders"
 	@echo "make backend-test   # Run backend tests"
 	@echo ""
+	@echo "make frontend       # Access frontend shell"
+	@echo "make frontend-install # Install frontend dependencies"
+	@echo "make frontend-dev   # Start frontend development server"
+	@echo "make frontend-build # Build frontend for production"
+	@echo ""
 	@echo "make logs           # View all logs"
-	@echo "make logs-app       # View backend logs"
-	@echo "make logs-frontend  # View frontend logs"
+	@echo "make ps             # Show running containers"
 	@echo ""
 	@echo "make db-backup      # Backup database"
-	@echo "make db-restore     # Restore database"
+	@echo "make db-restore     # Restore database (make db-restore BACKUP_FILE=filename.sql)"
 	@echo ""
 	@echo "make clean          # Remove all containers and volumes"
-
-# Initial setup
-.PHONY: install
-install:
-	@echo "Setting up MasterTime.ua project..."
-	mkdir -p backend frontend
-	mkdir -p docker/nginx/conf.d docker/nginx/ssl docker/php docker/node docker/postgres
-	cp -n .env.example .env || true
-	docker-compose up -d
-	make backend-install
-	make frontend-install
-	@echo "Setup complete! The application is running at http://localhost"
 
 # Docker commands
 .PHONY: up
@@ -65,21 +53,11 @@ frontend:
 
 .PHONY: frontend-install
 frontend-install:
-	@if [ ! -f "frontend/package.json" ]; then \
-		echo "Creating new Vue project..."; \
-		docker-compose exec frontend sh -c "cd /app && npm create vite@latest . -- --template vue"; \
-	else \
-		echo "Installing frontend dependencies..."; \
-		docker-compose exec frontend npm install; \
-	fi
+	docker-compose exec frontend npm install
 
 .PHONY: frontend-build
 frontend-build:
 	docker-compose exec frontend npm run build
-
-.PHONY: frontend-lint
-frontend-lint:
-	docker-compose exec frontend npm run lint
 
 .PHONY: frontend-dev
 frontend-dev:
@@ -90,17 +68,9 @@ frontend-dev:
 backend:
 	docker-compose exec app bash
 
-.PHONY: backend-install
-backend-install:
-	@if [ ! -f "backend/composer.json" ]; then \
-		echo "Creating new Laravel project..."; \
-		docker-compose exec app composer create-project laravel/laravel .; \
-	else \
-		echo "Installing composer dependencies..."; \
-		docker-compose exec app composer install; \
-	fi
-	docker-compose exec app php artisan key:generate --no-interaction || true
-	docker-compose exec app php artisan storage:link --no-interaction || true
+.PHONY: backend-composer-install
+backend-composer-install:
+	docker-compose exec app composer install
 
 .PHONY: backend-migrate
 backend-migrate:
@@ -124,6 +94,47 @@ backend-clear:
 	docker-compose exec app php artisan config:clear
 	docker-compose exec app php artisan route:clear
 	docker-compose exec app php artisan view:clear
+
+# Laravel development commands
+.PHONY: backend-make-controller
+backend-make-controller:
+	@if [ -z "$(NAME)" ]; then \
+		echo "Please specify a name: make backend-make-controller NAME=UserController"; \
+	else \
+		docker-compose exec app php artisan make:controller $(NAME) $(ARGS); \
+	fi
+
+.PHONY: backend-make-model
+backend-make-model:
+	@if [ -z "$(NAME)" ]; then \
+		echo "Please specify a name: make backend-make-model NAME=User"; \
+	else \
+		docker-compose exec app php artisan make:model $(NAME) $(if $(MIGRATION),-m,); \
+	fi
+
+.PHONY: backend-make-migration
+backend-make-migration:
+	@if [ -z "$(NAME)" ]; then \
+		echo "Please specify a name: make backend-make-migration NAME=create_users_table"; \
+	else \
+		docker-compose exec app php artisan make:migration $(NAME); \
+	fi
+
+.PHONY: backend-make-request
+backend-make-request:
+	@if [ -z "$(NAME)" ]; then \
+		echo "Please specify a name: make backend-make-request NAME=StoreUserRequest"; \
+	else \
+		docker-compose exec app php artisan make:request $(NAME); \
+	fi
+
+.PHONY: backend-make-resource
+backend-make-resource:
+	@if [ -z "$(NAME)" ]; then \
+		echo "Please specify a name: make backend-make-resource NAME=UserResource"; \
+	else \
+		docker-compose exec app php artisan make:resource $(NAME); \
+	fi
 
 # Logs
 .PHONY: logs
@@ -160,49 +171,9 @@ db-restore:
 		echo "Database restored successfully"; \
 	fi
 
-# Create a new Laravel controller
-.PHONY: make-controller
-make-controller:
-	@if [ -z "$(NAME)" ]; then \
-		echo "Please specify a name: make make-controller NAME=UserController"; \
-	else \
-		docker-compose exec app php artisan make:controller $(NAME); \
-	fi
-
-# Create a new Laravel model
-.PHONY: make-model
-make-model:
-	@if [ -z "$(NAME)" ]; then \
-		echo "Please specify a name: make make-model NAME=User"; \
-	else \
-		docker-compose exec app php artisan make:model $(NAME) $(if $(MIGRATION),-m,); \
-	fi
-
-# Create a new Laravel migration
-.PHONY: make-migration
-make-migration:
-	@if [ -z "$(NAME)" ]; then \
-		echo "Please specify a name: make make-migration NAME=create_users_table"; \
-	else \
-		docker-compose exec app php artisan make:migration $(NAME); \
-	fi
-
-# Create new Vue component
-.PHONY: make-component
-make-component:
-	@if [ -z "$(NAME)" ]; then \
-		echo "Please specify a name: make make-component NAME=Appointment"; \
-	else \
-		echo "Creating Vue component $(NAME)..."; \
-		mkdir -p frontend/src/components/$(NAME); \
-		echo "<template>\n  <div>\n    <!-- $(NAME) Component -->\n  </div>\n</template>\n\n<script setup>\n// Component logic\n</script>\n\n<style scoped>\n/* Component styles */\n</style>" > frontend/src/components/$(NAME)/$(NAME).vue; \
-		echo "Component created at frontend/src/components/$(NAME)/$(NAME).vue"; \
-	fi
-
 # Clean up everything
 .PHONY: clean
 clean:
 	docker-compose down -v
 	docker system prune -f
-	rm -rf node_modules vendor
 	@echo "Environment cleaned successfully"
