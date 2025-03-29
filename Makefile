@@ -6,6 +6,7 @@
 help:
 	@echo "MasterTime.ua Commands:"
 	@echo "-------------------"
+	@echo "make install        # Initial project setup (environment, dependencies, database)"
 	@echo "make up             # Start all containers"
 	@echo "make down           # Stop all containers"
 	@echo "make restart        # Restart all containers"
@@ -28,6 +29,30 @@ help:
 	@echo "make db-restore     # Restore database (make db-restore BACKUP_FILE=filename.sql)"
 	@echo ""
 	@echo "make clean          # Remove all containers and volumes"
+
+# Installation command
+.PHONY: install
+install:
+	@echo "Installing MasterTime.ua..."
+	@if [ ! -f .env ]; then \
+		cp .env.example .env; \
+		echo "Created .env file from example"; \
+	fi
+	@echo "Starting Docker containers..."
+	docker-compose up -d
+	@echo "Installing backend dependencies..."
+	docker-compose exec app composer install
+	@echo "Installing frontend dependencies..."
+	docker-compose exec frontend npm install
+	@echo "Generating application key..."
+	docker-compose exec app php artisan key:generate --ansi
+	@echo "Running database migrations..."
+	docker-compose exec app php artisan migrate
+	@echo "Running database seeders..."
+	docker-compose exec app php artisan db:seed
+	@echo "Creating storage link..."
+	docker-compose exec app php artisan storage:link
+	@echo "MasterTime.ua installation complete!"
 
 # Docker commands
 .PHONY: up

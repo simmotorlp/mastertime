@@ -19,6 +19,10 @@ cd mastertime
 # Copy example environment file and adjust if needed
 cp .env.example .env
 
+# Single command setup (recommended)
+make install
+
+# Alternatively, you can perform steps manually:
 # Start the Docker environment
 make up
 
@@ -138,7 +142,8 @@ php artisan cache:clear
 
 Run `make help` to see all available commands. Here are the most commonly used ones:
 
-### Docker Management
+### Installation and Docker Management
+- `make install` - Initial project setup (environment, dependencies, database)
 - `make up` - Start all containers
 - `make down` - Stop all containers
 - `make restart` - Restart all containers
