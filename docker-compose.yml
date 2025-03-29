@@ -1,0 +1,164 @@
+services:
+  # Laravel Backend API
+  app:
+    build:
+      context: ./docker/php
+      dockerfile: Dockerfile
+    container_name: mastertime-app
+    restart: unless-stopped
+    working_dir: /var/www/html
+    volumes:
+      - ./backend:/var/www/html
+      - ./docker/php/local.ini:/usr/local/etc/php/conf.d/local.ini
+    networks:
+      - mastertime-network
+    depends_on:
+      - db
+      - redis
+
+  # Web Server
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: mastertime-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./backend:/var/www/html
+      - ./docker/nginx/conf.d:/etc/nginx/conf.d
+      - ./docker/nginx/ssl:/etc/nginx/ssl
+    networks:
+      - mastertime-network
+    depends_on:
+      - app
+
+  # Database
+  db:
+    image: postgres:14-alpine
+    container_name: mastertime-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_DATABASE:-mastertime_platform}
+      POSTGRES_USER: ${DB_USERNAME:-mastertime}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-secret}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - mastertime-postgres-data:/var/lib/postgresql/data/pgdata
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    networks:
+      - mastertime-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-mastertime} -d ${DB_DATABASE:-mastertime_platform}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Caching
+  redis:
+    image: redis:7-alpine
+    container_name: mastertime-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-secret}
+    volumes:
+      - mastertime-redis-data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - mastertime-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Vue Frontend
+  frontend:
+    build:
+      context: ./docker/node
+      dockerfile: Dockerfile
+    container_name: mastertime-frontend
+    restart: unless-stopped
+    working_dir: /app
+    volumes:
+      - ./frontend:/app
+    ports:
+      - "3000:3000" # Vite primary port
+      - "5173:5173" # Vite alternative port
+    networks:
+      - mastertime-network
+    # Use a command that keeps the container running without requiring npm
+    command: tail -f /dev/null
+
+  # Database Management UI
+  pgadmin:
+    image: dpage/pgadmin4:7
+    container_name: mastertime-pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-admin@example.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:-admin}
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    volumes:
+      - mastertime-pgadmin-data:/var/lib/pgadmin
+    ports:
+      - "5050:80"
+    networks:
+      - mastertime-network
+    depends_on:
+      - db
+
+  # Email Testing
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: mastertime-mailhog
+    restart: unless-stopped
+    ports:
+      - "1025:1025" # SMTP server
+      - "8025:8025" # Web UI
+    networks:
+      - mastertime-network
+
+  # Log Storage
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.8.0
+    container_name: mastertime-elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    volumes:
+      - mastertime-elasticsearch-data:/usr/share/elasticsearch/data
+    ports:
+      - "9200:9200"
+    networks:
+      - mastertime-network
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+
+  # Log Visualization
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.8.0
+    container_name: mastertime-kibana
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    ports:
+      - "5601:5601"
+    networks:
+      - mastertime-network
+    depends_on:
+      - elasticsearch
+
+volumes:
+  mastertime-postgres-data:
+  mastertime-redis-data:
+  mastertime-pgadmin-data:
+  mastertime-elasticsearch-data:
+
+networks:
+  mastertime-network:
+    driver: bridge

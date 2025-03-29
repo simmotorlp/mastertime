@@ -1,0 +1,69 @@
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Docker volumes
+/data
+
+# Laravel specific
+/backend/vendor/
+/backend/node_modules/
+/backend/public/hot
+/backend/public/storage
+/backend/storage/*.key
+/backend/storage/logs/*
+/backend/.env
+/backend/Homestead.json
+/backend/Homestead.yaml
+/backend/.phpunit.result.cache
+
+# Vue/Node specific
+/frontend/node_modules/
+/frontend/.env
+/frontend/dist
+/frontend/.cache/
+/frontend/npm-debug.log
+/frontend/yarn-error.log
+/frontend/.nuxt
+
+# OS specific
+.DS_Store
+Thumbs.db
+
+# IDE specific
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Log files
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+/logs
+
+# SSL certificates (if they're not meant to be in version control)
+/docker/nginx/ssl/*
+!docker/nginx/ssl/.gitkeep
+
+# PgAdmin data
+/docker/pgadmin/
+
+# Redis data
+dump.rdb
+
+# Elasticsearch data
+/docker/elasticsearch/data/
+
+# Temporary files
+*.tmp
+*.bak
+*.swp
+*~.nib
