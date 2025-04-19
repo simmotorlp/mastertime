@@ -18,6 +18,10 @@ use Illuminate\Support\Facades\Route;
 
 // Public routes
 Route::prefix('v1')->group(function () {
+    Route::get('/test', function () {
+        return response()->json(['message' => 'Работает!']);
+    });
+
     // Authentication
     Route::post('auth/register', [AuthController::class, 'register']);
     Route::post('auth/login', [AuthController::class, 'login']);
