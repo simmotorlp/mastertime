@@ -64,7 +64,7 @@ class Service extends Model
      */
     public function specialists(): BelongsToMany
     {
-        return $this->belongsToMany(Specialist::class);
+        return $this->belongsToMany(Specialist::class, 'specialist_service');
     }
 
     /**
