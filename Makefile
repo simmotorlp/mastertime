@@ -10,12 +10,15 @@ help:
 	@echo "make up             # Start all containers"
 	@echo "make down           # Stop all containers"
 	@echo "make restart        # Restart all containers"
+	@echo "make rebuild        # Rebuild containers (use after Dockerfile changes)"
 	@echo ""
 	@echo "make backend        # Access backend shell"
 	@echo "make backend-composer-install # Install backend dependencies"
 	@echo "make backend-migrate # Run database migrations"
 	@echo "make backend-seed   # Run database seeders"
 	@echo "make backend-test   # Run backend tests"
+	@echo "make backend-fix-permissions # Fix storage permissions"
+	@echo "make backend-key-generate # Generate application key"
 	@echo ""
 	@echo "make frontend       # Access frontend shell"
 	@echo "make frontend-install # Install frontend dependencies"
@@ -23,6 +26,9 @@ help:
 	@echo "make frontend-build # Build frontend for production"
 	@echo ""
 	@echo "make logs           # View all logs"
+	@echo "make logs-app       # View Laravel app logs"
+	@echo "make logs-nginx     # View Nginx logs"
+	@echo "make logs-db        # View database logs"
 	@echo "make ps             # Show running containers"
 	@echo ""
 	@echo "make db-backup      # Backup database"
@@ -38,20 +44,20 @@ install:
 		cp .env.example .env; \
 		echo "Created .env file from example"; \
 	fi
+	@if [ ! -f backend/.env ]; then \
+		cp backend/.env.example backend/.env; \
+		echo "Created backend .env file from example"; \
+	fi
 	@echo "Starting Docker containers..."
-	docker-compose up -d
-	@echo "Installing backend dependencies..."
-	docker-compose exec app composer install
-	@echo "Installing frontend dependencies..."
-	docker-compose exec frontend npm install
-	@echo "Generating application key..."
-	docker-compose exec app php artisan key:generate --ansi
+	docker-compose up -d --build
+	@echo "Giving containers time to initialize..."
+	sleep 5
+	@echo "Setting permissions and generating application key..."
+	docker-compose exec app /usr/local/bin/fix-permissions.sh
 	@echo "Running database migrations..."
-	docker-compose exec app php artisan migrate
+	docker-compose exec app php artisan migrate --force
 	@echo "Running database seeders..."
-	docker-compose exec app php artisan db:seed
-	@echo "Creating storage link..."
-	docker-compose exec app php artisan storage:link
+	docker-compose exec app php artisan db:seed --force
 	@echo "MasterTime.ua installation complete!"
 
 # Docker commands
@@ -70,6 +76,12 @@ restart:
 .PHONY: ps
 ps:
 	docker-compose ps
+
+.PHONY: rebuild
+rebuild:
+	docker-compose down
+	docker-compose build --no-cache
+	docker-compose up -d
 
 # Frontend commands
 .PHONY: frontend
@@ -120,6 +132,22 @@ backend-clear:
 	docker-compose exec app php artisan route:clear
 	docker-compose exec app php artisan view:clear
 
+.PHONY: backend-fix-permissions
+backend-fix-permissions:
+	docker-compose exec app /usr/local/bin/fix-permissions.sh
+
+.PHONY: backend-key-generate
+backend-key-generate:
+	docker-compose exec app php artisan key:generate
+
+.PHONY: backend-storage-link
+backend-storage-link:
+	docker-compose exec app php artisan storage:link
+
+.PHONY: backend-routes
+backend-routes:
+	docker-compose exec app php artisan route:list
+
 # Laravel development commands
 .PHONY: backend-make-controller
 backend-make-controller:
@@ -161,6 +189,14 @@ backend-make-resource:
 		docker-compose exec app php artisan make:resource $(NAME); \
 	fi
 
+.PHONY: backend-make-seeder
+backend-make-seeder:
+	@if [ -z "$(NAME)" ]; then \
+		echo "Please specify a name: make backend-make-seeder NAME=UsersSeeder"; \
+	else \
+		docker-compose exec app php artisan make:seeder $(NAME); \
+	fi
+
 # Logs
 .PHONY: logs
 logs:
@@ -170,13 +206,17 @@ logs:
 logs-app:
 	docker-compose logs -f app
 
-.PHONY: logs-frontend
-logs-frontend:
-	docker-compose logs -f frontend
-
 .PHONY: logs-nginx
 logs-nginx:
 	docker-compose logs -f nginx
+
+.PHONY: logs-db
+logs-db:
+	docker-compose logs -f db
+
+.PHONY: logs-frontend
+logs-frontend:
+	docker-compose logs -f frontend
 
 # Database operations
 .PHONY: db-backup
@@ -202,3 +242,14 @@ clean:
 	docker-compose down -v
 	docker system prune -f
 	@echo "Environment cleaned successfully"
+
+# Debug API routes
+.PHONY: debug-api
+debug-api:
+	@echo "Checking API routes..."
+	docker-compose exec app php artisan route:list --path=api
+	@echo "\nChecking Laravel configuration..."
+	docker-compose exec app php artisan config:get app.url
+	docker-compose exec app php artisan config:get sanctum
+	@echo "\nChecking API connectivity..."
+	curl -v http://localhost/api/v1/salons
